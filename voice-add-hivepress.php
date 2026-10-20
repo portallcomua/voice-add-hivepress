@@ -3,7 +3,7 @@
  * Plugin Name: Voice ADD for HivePress PRO
  * Plugin URI:  https://uaserver.pp.ua/voice-add-hivepress/
  * Description: Голосове додавання оголошень у HivePress з фото та кастомними атрибутами.
- * Version:     2.3.0
+ * Version:     2.3.1
  * Author:      UAServer
  * Author URI:  https://uaserver.pp.ua/
  * License:     GPLv2 or later
@@ -14,7 +14,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('VAHP_VERSION',      '2.3.0');
+define('VAHP_VERSION',      '2.3.1');
 define('VAHP_FILE',         __FILE__);
 define('VAHP_SERVICE_SLUG', 'voice-add-hivepress');
 define('VAHP_GITHUB',       'portallcomua/voice-add-hivepress');
@@ -217,10 +217,10 @@ function vahp_page_main() {
     $draft = get_option('vahp_draft', '0') === '1';
     $sid = vahp_get_service_id();
 
-    $template = "ЗАГОЛОВОК: \nКАТЕГОРІЯ: \nОПИС: \n";
+    $template = vahp_en() ? "TITLE: \nCATEGORY: \nDESCRIPTION: \n" : "ЗАГОЛОВОК: \nКАТЕГОРІЯ: \nОПИС: \n";
     foreach ($attrs as $a) {
         if ($a['type'] === 'select') {
-            $template .= "Атрибут " . $a['name'] . " Значення \n";
+            $template .= (vahp_en() ? "Attribute " : "Атрибут ") . $a['name'] . (vahp_en() ? " Value \n" : " Значення \n");
         } else {
             $template .= $a['name'] . ": \n";
         }
