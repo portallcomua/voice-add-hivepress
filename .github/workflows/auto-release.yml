@@ -1,0 +1,99 @@
+name: Automatic Plugin Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "voice-add-hivepress.php"
+      - "**/*.php"
+      - ".github/workflows/auto-release.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build installable ZIP and publish latest release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PHP 7.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring
+          coverage: none
+
+      - name: Check PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            php -l "$file"
+          done < <(find . -type f -name '*.php' -not -path './.git/*' -print0)
+
+      - name: Build WordPress installable ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_ROOT="$RUNNER_TEMP/plugin-package"
+          mkdir -p "$PACKAGE_ROOT/voice-add-hivepress"
+          rsync -a ./ "$PACKAGE_ROOT/voice-add-hivepress/" \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='voice-add-hivepress.zip'
+          (cd "$PACKAGE_ROOT" && zip -qr "$GITHUB_WORKSPACE/voice-add-hivepress.zip" voice-add-hivepress)
+          test -s "$GITHUB_WORKSPACE/voice-add-hivepress.zip"
+
+      - name: Validate version and publish ZIP to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HEADER_VERSION="$(sed -n 's/^[[:space:]]*\* Version:[[:space:]]*//p' voice-add-hivepress.php | head -n 1 | tr -d '\r')"
+          CONSTANT_VERSION="$(sed -n "s/^[[:space:]]*define([[:space:]]*'VAHP_VERSION',[[:space:]]*'\\([^']*\\)'.*/\\1/p" voice-add-hivepress.php | head -n 1)"
+
+          if [[ -z "$HEADER_VERSION" || "$HEADER_VERSION" != "$CONSTANT_VERSION" ]]; then
+            echo "::error::Version mismatch. Plugin header='$HEADER_VERSION', VAHP_VERSION='$CONSTANT_VERSION'."
+            exit 1
+          fi
+
+          if [[ ! "$HEADER_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid plugin version: $HEADER_VERSION"
+            exit 1
+          fi
+
+          NEW_TAG="v$HEADER_VERSION"
+
+          if gh release view "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Release $NEW_TAG already exists; refreshing its installable ZIP."
+          else
+            LATEST_TAG="$(gh release list --limit 1 --json tagName --jq '.[0].tagName // ""')"
+            if [[ -n "$LATEST_TAG" ]]; then
+              HIGHEST="$(printf '%s\n%s\n' "$LATEST_TAG" "$NEW_TAG" | sort -V | tail -n 1)"
+              if [[ "$HIGHEST" != "$NEW_TAG" ]]; then
+                echo "::error::Refusing to publish older version $NEW_TAG; latest release is $LATEST_TAG."
+                exit 1
+              fi
+            fi
+
+            if git ls-remote --exit-code --tags origin "refs/tags/$NEW_TAG" >/dev/null 2>&1; then
+              echo "::error::Tag $NEW_TAG exists but its GitHub Release is missing."
+              exit 1
+            fi
+
+            gh release create "$NEW_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$NEW_TAG" \
+              --generate-notes
+          fi
+
+          gh release upload "$NEW_TAG" voice-add-hivepress.zip --clobber
+          echo "Published installable ZIP for $NEW_TAG"
