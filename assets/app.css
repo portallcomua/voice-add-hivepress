@@ -42,21 +42,3 @@
 .va-table th { background: #f1f6fd; }
 .va-pre { background: #1d2327; color: #e2e4e7; padding: 10px 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; }
 @media (max-width: 600px) { .va-row .va-btn { flex: 1 1 100% !important; } }
-
-/* Попап оплати PRO */
-.va-modal[hidden] { display: none !important; }
-.va-modal { position: fixed; inset: 0; z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 14px; }
-.va-modal__bg { position: absolute; inset: 0; background: rgba(10,20,40,.65); }
-.va-modal__box { position: relative; width: 100%; max-width: 470px; max-height: 92vh; overflow: auto; background: #fff; border-top: 8px solid #ffd500; border-radius: 14px; padding: 22px 20px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
-.va-modal__box h3 { margin: 0 28px 8px 0; color: #0057b7; }
-.va-modal__x { position: absolute; top: 6px; right: 10px; background: none; border: 0; font-size: 30px; line-height: 1; cursor: pointer; color: #667; }
-.va-modal__price { font-size: 1.6em; font-weight: 800; margin-bottom: 8px; }
-.va-idrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px; background: #f1f6fd; border: 2px dashed #0057b7; border-radius: 12px; }
-.va-idrow strong { flex: 1 1 140px; font-size: 1.3em; word-break: break-all; user-select: all; }
-.va-copy { padding: 10px 14px; background: #ffd500; color: #222; border: 0; border-radius: 10px; font-weight: 700; cursor: pointer; }
-.va-copy.is-copied { background: #1c9c4a; color: #fff; }
-.va-note { margin: 12px 0 8px; padding: 10px 12px; background: #fff4c2; border-radius: 10px; line-height: 1.45; font-size: .95em; }
-.va-modal__msg { padding: 12px; border-radius: 10px; background: #fdeaea; color: #a11; font-weight: 600; line-height: 1.45; margin-bottom: 10px; }
-.va-modal__msg.is-info { background: #e8f1fc; color: #003f87; }
-.va-pro-blocked { background: #fdeaea; border-color: #d63638; color: #a11; font-weight: 600; }
-body.va-lock { overflow: hidden; }

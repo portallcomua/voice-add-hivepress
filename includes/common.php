@@ -134,38 +134,40 @@ function vahp_updater() {
 vahp_updater();
 
 /* ====================================================================== */
-/* 3. PRO ЧЕРЕЗ Universal Pay Box (сервер оплат). PRO прив'язано до ДОМЕНУ */
+/* 3. PRO ЧЕРЕЗ FREEMIUS + UA PAY BOX                                      */
 /* ====================================================================== */
 function vahp_hub_url() {
-	$u = trim( (string) get_option( 'vahp_hub', '' ) );
-	if ( '' === $u ) {
-		$u = VAHP_HUB;
-	}
-	return untrailingslashit( esc_url_raw( $u ) );
+	return untrailingslashit( esc_url_raw( VAHP_HUB ) );
 }
-function vahp_domain() {
-	$h = wp_parse_url( home_url(), PHP_URL_HOST );
-	return strtolower( preg_replace( '/^www\./', '', (string) $h ) );
-}
-/** Сервер оплат — це цей самий сайт (Pay Box встановлено поруч)? Тоді викликаємо REST без HTTP. */
+
+/** Pay Box працює на цьому ж сайті — використовуємо його PHP API без HTTP. */
 function vahp_hub_is_local() {
-	$h = strtolower( preg_replace( '/^www\./', '', (string) wp_parse_url( vahp_hub_url(), PHP_URL_HOST ) ) );
-	return '' !== $h && vahp_domain() === $h && class_exists( 'UPB_Rest' );
+	$hub_host  = strtolower( preg_replace( '/^www\./', '', (string) wp_parse_url( vahp_hub_url(), PHP_URL_HOST ) ) );
+	$site_host = strtolower( preg_replace( '/^www\./', '', (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) );
+	return $hub_host && $hub_host === $site_host
+		&& class_exists( '\\UAPM\\PayBox\\UPB_Rest' )
+		&& class_exists( '\\UAPM\\PayBox\\UPB_Freemius' );
 }
+
+/** Запит до центрального UA Pay Box. Product ID, Plan ID і секрети залишаються тільки в Pay Box. */
 function vahp_hub_call( $method, $route, array $params = array() ) {
 	if ( vahp_hub_is_local() ) {
 		$req = new WP_REST_Request( $method, '/upb/v1/' . $route );
-		foreach ( $params as $k => $v ) {
-			$req->set_param( $k, $v );
+		foreach ( $params as $key => $value ) {
+			$req->set_param( $key, $value );
 		}
-		$res  = rest_do_request( $req );
+		$res = rest_do_request( $req );
+		if ( is_wp_error( $res ) ) {
+			return $res;
+		}
 		$data = $res->get_data();
 		$code = $res->get_status();
 	} else {
 		$url = vahp_hub_url() . '/wp-json/upb/v1/' . $route;
-		$r   = ( 'GET' === $method )
-			? wp_remote_get( add_query_arg( $params, $url ), array( 'timeout' => 10 ) )
-			: wp_remote_post( $url, array( 'timeout' => 15, 'body' => $params ) );
+		$args = array( 'timeout' => 15, 'headers' => array( 'Accept' => 'application/json' ) );
+		$r = 'GET' === strtoupper( $method )
+			? wp_remote_get( add_query_arg( $params, $url ), $args )
+			: wp_remote_post( $url, array_merge( $args, array( 'body' => $params ) ) );
 		if ( is_wp_error( $r ) ) {
 			return $r;
 		}
@@ -173,40 +175,118 @@ function vahp_hub_call( $method, $route, array $params = array() ) {
 		$data = json_decode( wp_remote_retrieve_body( $r ), true );
 	}
 	if ( $code < 200 || $code >= 300 || ! is_array( $data ) ) {
-		return new WP_Error( 'hub', ( is_array( $data ) && isset( $data['message'] ) ) ? $data['message'] : vahp_t( 'Сервер оплати недоступний', 'Payment server unavailable' ) );
+		$message = is_array( $data ) && ! empty( $data['message'] )
+			? $data['message']
+			: vahp_t( 'UA Pay Box тимчасово недоступний.', 'UA Pay Box is temporarily unavailable.' );
+		return new WP_Error( 'vahp_paybox', $message );
 	}
 	return $data;
 }
-/** Стан PRO цього сайту. Кеш 6 год.; якщо сервер недоступний — діє останній відомий стан до 7 діб. */
+
+/** Статус Freemius для поточного користувача WordPress. */
 function vahp_pro_state( $force = false ) {
-	$c = get_option( 'vahp_pro' );
-	$c = is_array( $c ) ? $c : array( 'state' => 'free', 'expires' => 0, 'checked' => 0 );
-	if ( $force || ( time() - (int) $c['checked'] > 6 * HOUR_IN_SECONDS && ! get_transient( 'vahp_hub_down' ) ) ) {
-		$r = vahp_hub_call( 'GET', 'status', array( 'service' => 'voice-add-hivepress', 'domain' => vahp_domain() ) );
-		if ( ! is_wp_error( $r ) ) {
-			$c = array( 'state' => $r['state'], 'expires' => (int) $r['expires'], 'checked' => time() );
-			update_option( 'vahp_pro', $c, false );
-			delete_transient( 'vahp_hub_down' );
-		} else {
-			set_transient( 'vahp_hub_down', 1, 5 * MINUTE_IN_SECONDS );
-			if ( time() - (int) $c['checked'] > 7 * DAY_IN_SECONDS ) {
-				$c['state'] = 'free';
-			}
+	$user_id = get_current_user_id();
+	$free = array( 'state' => 'free', 'expires' => 0, 'checked' => time() );
+	if ( ! $user_id ) {
+		return $free;
+	}
+
+	// Якщо UA Pay Box встановлений локально, користуємося його штатною перевіркою.
+	if ( function_exists( 'upb_service_id' ) && function_exists( 'wcc_check_user_premium' ) ) {
+		$service_id = (int) upb_service_id( 'voice-add-hivepress' );
+		if ( $service_id ) {
+			$active  = (bool) wcc_check_user_premium( $user_id, $service_id );
+			$expires = $active && function_exists( 'wcc_get_user_premium_expiry' )
+				? wcc_get_user_premium_expiry( $user_id, $service_id )
+				: 0;
+			return array(
+				'state'   => $active ? ( $expires ? 'active' : 'unlimited' ) : 'free',
+				'expires' => $active ? (int) $expires : 0,
+				'checked' => time(),
+			);
 		}
 	}
-	return $c;
+
+	// Для зовнішнього сайту ліцензія перевіряється за email поточного WP-користувача.
+	$user  = get_userdata( $user_id );
+	$email = $user ? sanitize_email( $user->user_email ) : '';
+	if ( ! $email || ! is_email( $email ) ) {
+		return $free;
+	}
+
+	$cache_key = 'vahp_fs_' . $user_id . '_' . md5( strtolower( $email ) );
+	$cached = get_transient( $cache_key );
+	if ( ! $force && is_array( $cached ) && isset( $cached['checked'], $cached['state'] )
+		&& time() - (int) $cached['checked'] < 5 * MINUTE_IN_SECONDS ) {
+		return $cached;
+	}
+
+	$result = vahp_hub_call( 'POST', 'license/status', array(
+		'service' => 'voice-add-hivepress',
+		'email'   => $email,
+	) );
+
+	if ( ! is_wp_error( $result ) ) {
+		$valid   = ! empty( $result['valid'] );
+		$expires = isset( $result['expires'] ) ? absint( $result['expires'] ) : 0;
+		$state   = $valid ? ( $expires ? 'active' : 'unlimited' ) : 'free';
+		$state_data = array( 'state' => $state, 'expires' => $valid ? $expires : 0, 'checked' => time() );
+		set_transient( $cache_key, $state_data, 5 * MINUTE_IN_SECONDS );
+		return $state_data;
+	}
+
+	// Короткий збій сервера не вимикає вже підтверджену ліцензію миттєво.
+	if ( is_array( $cached ) && ! empty( $cached['state'] ) && 'free' !== $cached['state']
+		&& isset( $cached['checked'] ) && time() - (int) $cached['checked'] < DAY_IN_SECONDS ) {
+		return $cached;
+	}
+	return $free;
 }
+
 function vahp_is_pro() {
-	$c = vahp_pro_state();
-	return in_array( $c['state'], array( 'active', 'expiring', 'unlimited' ), true ) && ( ! $c['expires'] || $c['expires'] > time() );
+	$state = vahp_pro_state();
+	return in_array( $state['state'], array( 'active', 'expiring', 'unlimited' ), true )
+		&& ( empty( $state['expires'] ) || (int) $state['expires'] > time() );
 }
+
+/** Кнопка Freemius Checkout, створена налаштованою послугою UA Pay Box. */
 function vahp_buy_button( $label = '' ) {
-	return '<button type="button" class="button button-primary va-buy" data-va-buy="1">💰 ' . esc_html( $label ? $label : vahp_t( 'Купити PRO', 'Buy PRO' ) ) . '</button>';
+	$label = $label ? $label : vahp_t( 'Купити PRO', 'Buy PRO' );
+
+	// На сайті, де встановлено Pay Box, використовуємо його штатну кнопку й модальне вікно.
+	if ( function_exists( 'upb_service_id' ) && function_exists( 'upb_buy_button' ) ) {
+		$service_id = (int) upb_service_id( 'voice-add-hivepress' );
+		if ( $service_id ) {
+			return upb_buy_button( $service_id, $label, 'va-buy' );
+		}
+	}
+
+	// На зовнішньому сайті отримуємо checkout URL із центрального Pay Box.
+	$user  = get_userdata( get_current_user_id() );
+	$email = $user ? sanitize_email( $user->user_email ) : '';
+	if ( ! $email || ! is_email( $email ) ) {
+		return '<span class="va-muted">' . esc_html( vahp_t( 'Для купівлі PRO потрібен коректний email облікового запису.', 'A valid account email is required to buy PRO.' ) ) . '</span>';
+	}
+	$service = vahp_hub_call( 'GET', 'service', array(
+		'service' => 'voice-add-hivepress',
+		'email'   => $email,
+		'locale'  => get_locale(),
+	) );
+	$url = is_array( $service ) && ! empty( $service['checkout_url'] )
+		? $service['checkout_url']
+		: ( is_array( $service ) && ! empty( $service['url'] ) ? $service['url'] : '' );
+	if ( ! $url ) {
+		return '<span class="va-muted">' . esc_html( vahp_t( 'Оплата PRO наразі недоступна. Перевірте налаштування послуги в UA Pay Box.', 'PRO checkout is unavailable. Check the service settings in UA Pay Box.' ) ) . '</span>';
+	}
+	return '<a class="button button-primary va-buy" href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer">💰 ' . esc_html( $label ) . '</a>';
 }
-// Якщо Pay Box стоїть на цьому ж сайті — проект створюється автоматично (Конверт і вартість вказує адмін).
+
+// Якщо Pay Box встановлений локально і послуги ще немає — створюємо запис за slug.
+// Уже налаштований продукт Freemius не змінюємо й не перезаписуємо.
 add_action( 'admin_init', function () {
-	if ( vahp_hub_is_local() && function_exists( 'upb_register_service' ) && ! upb_service_id( 'voice-add-hivepress' ) ) {
-		upb_register_service( 'voice-add-hivepress', 'Voice ADD for HivePress PRO', array( 'id_mode' => 'domain' ) );
+	if ( function_exists( 'upb_register_service' ) && function_exists( 'upb_service_id' )
+		&& ! upb_service_id( 'voice-add-hivepress' ) ) {
+		upb_register_service( 'voice-add-hivepress', 'Voice ADD for HivePress PRO' );
 	}
 } );
 
@@ -472,9 +552,7 @@ function vahp_page_settings() {
 	if ( isset( $_POST['vahp_save'] ) && check_admin_referer( 'vahp_cfg' ) ) {
 		update_option( 'vahp_rbg_api', sanitize_text_field( wp_unslash( isset( $_POST['rbg_api'] ) ? $_POST['rbg_api'] : '' ) ) );
 		update_option( 'vahp_draft', isset( $_POST['draft'] ) ? '1' : '0' );
-		update_option( 'vahp_hub', esc_url_raw( trim( wp_unslash( isset( $_POST['hub'] ) ? $_POST['hub'] : '' ) ) ) );
-		vahp_pro_state( true );
-		$lang = isset( $_POST['lang'] ) ? sanitize_key( $_POST['lang'] ) : 'auto';
+				$lang = isset( $_POST['lang'] ) ? sanitize_key( $_POST['lang'] ) : 'auto';
 		update_option( 'vahp_lang', in_array( $lang, array( 'auto', 'uk', 'en' ), true ) ? $lang : 'auto' );
 		$valid = array_keys( get_editable_roles() );
 		$roles = isset( $_POST['roles'] ) ? array_map( 'sanitize_key', (array) wp_unslash( $_POST['roles'] ) ) : array();
@@ -484,10 +562,6 @@ function vahp_page_settings() {
 		}
 		update_option( 'vahp_allowed_roles', $roles );
 		$msg = '<div class="notice notice-success is-dismissible"><p>✅ ' . esc_html( vahp_t( 'Збережено!', 'Saved!' ) ) . '</p></div>';
-	}
-	if ( isset( $_POST['vahp_pro_refresh'] ) && check_admin_referer( 'vahp_cfg' ) ) {
-		vahp_pro_state( true );
-		$msg = '<div class="notice notice-success is-dismissible"><p>✅ ' . esc_html( vahp_t( 'Статус PRO оновлено.', 'PRO status refreshed.' ) ) . '</p></div>';
 	}
 	if ( isset( $_POST['vahp_check_update'] ) && check_admin_referer( 'vahp_cfg' ) ) {
 		vahp_updater()->flush();
@@ -505,9 +579,6 @@ function vahp_page_settings() {
 	$draft = get_option( 'vahp_draft', '0' );
 	$roles = (array) get_option( 'vahp_allowed_roles', array( 'administrator', 'vahp_manager' ) );
 	$lang  = get_option( 'vahp_lang', 'auto' );
-	$hub   = get_option( 'vahp_hub', '' );
-	$svc   = vahp_hub_call( 'GET', 'service', array( 'service' => 'voice-add-hivepress' ) );
-	$pst   = vahp_pro_state();
 	?>
 	<div class="wrap">
 		<h1>
@@ -523,11 +594,6 @@ function vahp_page_settings() {
 					<th><label>Remove.bg API Key</label></th>
 					<td><input type="text" name="rbg_api" value="<?php echo esc_attr( $rbg ); ?>" class="regular-text code" autocomplete="off">
 					<p class="description"><?php echo esc_html( vahp_t( 'Для прибирання фону на фото. Ключ: remove.bg/api. Без ключа вибір фону вимкнено.', 'For background removal on photos. Get a key at remove.bg/api. Without a key the background picker is disabled.' ) ); ?></p></td>
-				</tr>
-				<tr>
-					<th><label><?php echo esc_html( vahp_t( 'Сервер оплат (Pay Box)', 'Payment server (Pay Box)' ) ); ?></label></th>
-					<td><input type="url" name="hub" value="<?php echo esc_attr( $hub ); ?>" class="regular-text code" placeholder="<?php echo esc_attr( VAHP_HUB ); ?>">
-					<p class="description"><?php echo esc_html( vahp_t( 'Сайт із плагіном Universal Pay Box PRO, де обліковуються активації PRO. Порожньо = стандартний сервер.', 'Site running Universal Pay Box PRO that records PRO activations. Empty = default server.' ) ); ?></p></td>
 				</tr>
 				<tr>
 					<th><?php echo esc_html( vahp_t( 'Статус нового запису', 'New item status' ) ); ?></th>
@@ -561,33 +627,6 @@ function vahp_page_settings() {
 			</p>
 		</form>
 
-		<hr>
-		<h2>💰 PRO</h2>
-		<table class="widefat striped" style="max-width:680px"><tbody>
-			<tr><td><?php echo esc_html( vahp_t( 'Домен вашого сайту (вказується в платежі)', 'Your site domain (put it in the payment comment)' ) ); ?></td><td><strong><?php echo esc_html( vahp_domain() ); ?></strong></td></tr>
-			<tr><td><?php echo esc_html( vahp_t( 'Сервер оплат', 'Payment server' ) ); ?></td><td><?php echo esc_html( vahp_hub_url() ); ?> <?php echo vahp_hub_is_local() ? '(' . esc_html( vahp_t( 'цей сайт', 'this site' ) ) . ')' : ''; ?></td></tr>
-			<tr><td><?php echo esc_html( vahp_t( 'Проект на сервері', 'Project on server' ) ); ?></td><td><?php
-				if ( is_wp_error( $svc ) ) {
-					echo '🔴 ' . esc_html( $svc->get_error_message() );
-				} else {
-					echo '🟢 ' . esc_html( $svc['name'] ) . ' · ' . esc_html( $svc['price'] ) . ( empty( $svc['url'] ) ? ' · ⚠️ ' . esc_html( vahp_t( 'немає посилання на Конверт', 'no envelope link' ) ) : '' );
-				}
-			?></td></tr>
-			<tr><td><?php echo esc_html( vahp_t( 'Статус PRO', 'PRO status' ) ); ?></td><td><?php
-				$labels = array( 'free' => 'FREE', 'active' => '✅ PRO', 'expiring' => '✅ PRO (' . vahp_t( 'скоро закінчиться', 'expiring soon' ) . ')', 'unlimited' => '✅ PRO (∞)', 'blocked' => '⛔ ' . vahp_t( 'заблоковано', 'blocked' ) );
-				echo esc_html( isset( $labels[ $pst['state'] ] ) ? $labels[ $pst['state'] ] : $pst['state'] );
-				if ( ! empty( $pst['expires'] ) ) {
-					echo ' · ' . esc_html( vahp_t( 'до ', 'until ' ) . wp_date( 'd.m.Y', (int) $pst['expires'] ) );
-				}
-			?> · FREE <?php echo (int) vahp_count(); ?>/<?php echo (int) vahp_limit(); ?></td></tr>
-		</tbody></table>
-		<form method="post" style="margin-top:10px"><?php wp_nonce_field( 'vahp_cfg' ); ?>
-			<button type="submit" name="vahp_pro_refresh" value="1" class="button">🔄 <?php echo esc_html( vahp_t( 'Оновити статус PRO', 'Refresh PRO status' ) ); ?></button>
-			<?php if ( vahp_hub_is_local() ) : ?>
-				<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=upb-services' ) ); ?>">UA Pay Box → <?php echo esc_html( vahp_t( 'Послуги', 'Services' ) ); ?></a>
-				<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=upb-premiums' ) ); ?>"><?php echo esc_html( vahp_t( 'Контроль Преміумів', 'Premium control' ) ); ?></a>
-			<?php endif; ?>
-		</form>
 	</div>
 	<?php
 }
@@ -639,14 +678,6 @@ add_action( 'admin_enqueue_scripts', function ( $hook ) {
 		'netErr'     => vahp_t( 'Помилка зʼєднання', 'Connection error' ),
 		'remove'     => vahp_t( 'Натисніть, щоб видалити фото', 'Tap to remove photo' ),
 		'printTitle' => vahp_t( 'Інструкція', 'Instruction' ),
-		'copyDomain' => '📋 ' . vahp_t( 'Скопіювати домен', 'Copy domain' ),
-		'copied'     => vahp_t( 'Скопійовано! 👍', 'Copied! 👍' ),
-		'copyManual' => vahp_t( 'Скопіюйте виділене вручну', 'Copy the selected text manually' ),
-		'payGo'      => vahp_t( 'Перейти до оплати →', 'Go to payment →' ),
-		'activating' => vahp_t( 'Активація…', 'Activating…' ),
-		'alreadyPro' => vahp_t( 'PRO вже активний.', 'PRO is already active.' ),
-		'blockedMsg' => vahp_t( 'PRO заблоковано: оплата не надійшла. Сплатіть за посиланням, вказавши домен у коментарі, — після підтвердження адмін відновить доступ.', 'PRO is blocked: payment was not received. Pay via the link with the domain in the comment — the admin will restore access after confirming.' ),
-		'noPayUrl'   => vahp_t( 'Адміністратор ще не вказав посилання на оплату.', 'The administrator has not set the payment link yet.' ),
 	);
 	wp_localize_script(
 		'vahp-app',
@@ -654,7 +685,7 @@ add_action( 'admin_enqueue_scripts', function ( $hook ) {
 		array(
 			'ajax'    => admin_url( 'admin-ajax.php' ),
 			'nonce'   => wp_create_nonce( 'vahp_nonce' ),
-			'actions' => array( 'save' => 'vahp_save', 'bg' => 'vahp_remove_bg', 'import' => 'vahp_import', 'payInfo' => 'vahp_pay_info', 'payGo' => 'vahp_pay_activate' ),
+			'actions' => array( 'save' => 'vahp_save', 'bg' => 'vahp_remove_bg', 'import' => 'vahp_import' ),
 			'attrNames' => array_map( function ( $a ) { return $a['label']; }, vahp_attr_defs() ),
 			'lang'    => vahp_en() ? 'en-US' : 'uk-UA',
 			'hasRbg'  => '' !== (string) get_option( 'vahp_rbg_api', '' ),
@@ -741,24 +772,6 @@ function vahp_page_main() {
 				<a class="button" href="<?php echo esc_url( $exp_url . '&sep=comma' ); ?>">📤 <?php echo esc_html( vahp_t( 'Експорт («,»)', 'Export (“,”)' ) ); ?></a>
 			</p>
 			<div id="va_csv_msg" class="va-msg"></div>
-		</div>
-
-		<!-- ОПЛАТА PRO -->
-		<div class="va-modal" id="va_pay" hidden>
-			<div class="va-modal__bg" data-va-close></div>
-			<div class="va-modal__box" role="dialog" aria-modal="true">
-				<button type="button" class="va-modal__x" data-va-close aria-label="×">&times;</button>
-				<h3>💰 <span data-va-pname></span></h3>
-				<div class="va-modal__price" data-va-pprice></div>
-				<div data-va-pmsg class="va-modal__msg" hidden></div>
-				<div data-va-pbody>
-					<p class="va-muted"><?php echo esc_html( vahp_t( 'Домен вашого сайту:', 'Your site domain:' ) ); ?></p>
-					<div class="va-idrow"><strong data-va-domain></strong><button type="button" id="va_pay_copy" class="va-copy">📋 <?php echo esc_html( vahp_t( 'Скопіювати домен', 'Copy domain' ) ); ?></button></div>
-					<p class="va-note"><strong><?php echo esc_html( vahp_t( 'Обов\'язково', 'Required:' ) ); ?></strong> <?php echo esc_html( vahp_t( 'вставте скопійований домен у поле «Коментар» або «Призначення платежу» на сторінці банку. Це необхідно для верифікації вашого платежу адміном. Платежі без вказаного домену будуть заблоковані.', 'paste the copied domain into the “Comment” or “Payment purpose” field on the bank page. It is needed to verify your payment. Payments without the domain will be blocked.' ) ); ?></p>
-					<p class="va-muted"><?php echo esc_html( vahp_t( 'PRO активується одразу. Якщо платіж не надійде — адмін вимкне доступ.', 'PRO is activated immediately. If the payment does not arrive, the admin will disable it.' ) ); ?></p>
-					<button type="button" id="va_pay_go" class="va-btn va-blue" disabled><?php echo esc_html( vahp_t( 'Перейти до оплати →', 'Go to payment →' ) ); ?></button>
-				</div>
-			</div>
 		</div>
 
 		<!-- ІНСТРУКЦІЇ -->
@@ -859,26 +872,6 @@ add_action( 'wp_ajax_vahp_save', function () {
 	}
 	$res['left'] = vahp_is_pro() ? -1 : vahp_remaining();
 	wp_send_json_success( $res );
-} );
-
-add_action( 'wp_ajax_vahp_pay_info', function () {
-	vahp_ajax_guard();
-	$svc = vahp_hub_call( 'GET', 'service', array( 'service' => 'voice-add-hivepress' ) );
-	if ( is_wp_error( $svc ) ) {
-		wp_send_json_error( $svc->get_error_message() );
-	}
-	$st = vahp_pro_state( true );
-	wp_send_json_success( array( 'name' => $svc['name'], 'price' => $svc['price'], 'url' => $svc['url'], 'domain' => vahp_domain(), 'state' => $st['state'] ) );
-} );
-
-add_action( 'wp_ajax_vahp_pay_activate', function () {
-	vahp_ajax_guard();
-	$r = vahp_hub_call( 'POST', 'activate', array( 'service' => 'voice-add-hivepress', 'domain' => vahp_domain(), 'email' => get_option( 'admin_email' ), 'site_url' => home_url() ) );
-	if ( is_wp_error( $r ) ) {
-		wp_send_json_error( $r->get_error_message() );
-	}
-	vahp_pro_state( true );
-	wp_send_json_success( array( 'url' => $r['url'] ) );
 } );
 
 add_action( 'wp_ajax_vahp_remove_bg', function () {

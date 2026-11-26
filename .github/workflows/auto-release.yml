@@ -58,8 +58,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          HEADER_VERSION="$(sed -n 's/^[[:space:]]*\* Version:[[:space:]]*//p' voice-add-hivepress.php | head -n 1 | tr -d '\r')"
-          CONSTANT_VERSION="$(sed -n "s/^[[:space:]]*define([[:space:]]*'VAHP_VERSION',[[:space:]]*'\\([^']*\\)'.*/\\1/p" voice-add-hivepress.php | head -n 1)"
+          HEADER_VERSION="$(sed -n 's/^[[:space:]]*\* Version:[[:space:]]*//p' voice-add-hivepress-pro.php | head -n 1 | tr -d '\r')"
+          CONSTANT_VERSION="$(sed -n "s/^[[:space:]]*define([[:space:]]*'VAHP_VERSION',[[:space:]]*'\\([^']*\\)'.*/\\1/p" voice-add-hivepress-pro.php | head -n 1)"
           if [[ -z "$HEADER_VERSION" || "$HEADER_VERSION" != "$CONSTANT_VERSION" ]]; then
             echo "::error::Version mismatch."
             exit 1
