@@ -127,7 +127,7 @@ class vahpp_Updater {
 function vahpp_updater() {
 	static $u = null;
 	if ( null === $u ) {
-		$u = new vahpp_Updater( vahpp_FILE, vahpp_GITHUB, vahpp_VERSION );
+		$u = new vahpp_Updater( VAHPP_FILE, VAHPP_GITHUB, VAHPP_VERSION );
 	}
 	return $u;
 }
@@ -137,7 +137,7 @@ vahpp_updater();
 /* 3. PRO ЧЕРЕЗ FREEMIUS + UA PAY BOX                                      */
 /* ====================================================================== */
 function vahpp_hub_url() {
-	return untrailingslashit( esc_url_raw( vahpp_HUB ) );
+	return untrailingslashit( esc_url_raw( VAHPP_HUB ) );
 }
 
 /** Pay Box працює на цьому ж сайті — використовуємо його PHP API без HTTP. */
@@ -291,7 +291,7 @@ add_action( 'admin_init', function () {
 } );
 
 /* Безкоштовний ліміт — на користувача */
-function vahpp_limit() { return (int) apply_filters( 'vahp_free_limit', vahpp_FREE_LIMIT ); }
+function vahpp_limit() { return (int) apply_filters( 'vahp_free_limit', VAHPP_FREE_LIMIT ); }
 function vahpp_count() { return (int) get_user_meta( get_current_user_id(), 'vahp_ops', true ); }
 function vahpp_inc( $n = 1 ) { update_user_meta( get_current_user_id(), 'vahp_ops', vahpp_count() + (int) $n ); }
 function vahpp_remaining() { return max( 0, vahpp_limit() - vahpp_count() ); }
@@ -309,10 +309,10 @@ function vahpp_setup() {
 	add_option( 'vahp_rbg_api', '' );
 	add_option( 'vahpp_lang', 'auto' );
 	add_option( 'vahp_allowed_roles', array( 'administrator', 'vahp_manager' ) );
-	update_option( 'vahp_ver', vahpp_VERSION );
+	update_option( 'vahp_ver', VAHPP_VERSION );
 }
 add_action( 'admin_init', function () {
-	if ( get_option( 'vahp_ver' ) !== vahpp_VERSION ) {
+	if ( get_option( 'vahp_ver' ) !== VAHPP_VERSION ) {
 		vahpp_setup();
 	}
 } );
@@ -536,7 +536,7 @@ add_action( 'admin_menu', function () {
 	add_submenu_page( 'vahp_main', vahpp_t( 'Налаштування', 'Settings' ), '⚙️ ' . vahpp_t( 'Налаштування', 'Settings' ), 'manage_options', 'vahp_settings', 'vahpp_page_settings' );
 }, 20 );
 
-add_filter( 'plugin_action_links_' . plugin_basename( vahpp_FILE ), function ( $links ) {
+add_filter( 'plugin_action_links_' . plugin_basename( VAHPP_FILE ), function ( $links ) {
 	array_unshift( $links, '<a href="' . esc_url( admin_url( 'admin.php?page=vahp_settings' ) ) . '">' . esc_html( vahpp_t( 'Налаштування', 'Settings' ) ) . '</a>' );
 	return $links;
 } );
@@ -572,7 +572,7 @@ function vahpp_page_settings() {
 	<div class="wrap">
 		<h1>
 			⚙️ Voice ADD for HivePress PRO
-			<span style="font-size:14px;color:#666;font-weight:400">v<?php echo esc_html( vahpp_VERSION ); ?></span>
+			<span style="font-size:14px;color:#666;font-weight:400">v<?php echo esc_html( VAHPP_VERSION ); ?></span>
 			<a href="<?php echo esc_url( admin_url( 'admin.php?page=vahp_main' ) ); ?>" class="page-title-action">🎤 <?php echo esc_html( vahpp_t( 'Перейти на плагін', 'Go to plugin' ) ); ?></a>
 		</h1>
 		<?php echo $msg; // phpcs:ignore ?>
@@ -626,8 +626,8 @@ add_action( 'admin_enqueue_scripts', function ( $hook ) {
 	if ( false === strpos( $hook, 'vahp_main' ) ) {
 		return;
 	}
-	wp_enqueue_style( 'vahp-app', vahpp_URL . 'assets/app.css', array(), vahpp_VERSION );
-	wp_enqueue_script( 'vahp-app', vahpp_URL . 'assets/app.js', array(), vahpp_VERSION, true );
+	wp_enqueue_style( 'vahp-app', VAHPP_URL . 'assets/app.css', array(), VAHPP_VERSION );
+	wp_enqueue_script( 'vahp-app', VAHPP_URL . 'assets/app.js', array(), VAHPP_VERSION, true );
 
 	$fields = array();
 	foreach ( vahpp_fields() as $d ) {
@@ -695,7 +695,7 @@ function vahpp_page_main() {
 	?>
 	<div class="wrap va-wrap" id="va_app">
 		<div class="va-head">
-			<h1>🎤 Voice ADD for HivePress PRO <sup>v<?php echo esc_html( vahpp_VERSION ); ?></sup></h1>
+			<h1>🎤 Voice ADD for HivePress PRO <sup>v<?php echo esc_html( VAHPP_VERSION ); ?></sup></h1>
 			<div class="va-head-btns">
 				<button type="button" class="button" id="va_go_instr">📖 <?php echo esc_html( vahpp_t( 'Інструкція', 'Instructions' ) ); ?></button>
 				<?php if ( current_user_can( 'manage_options' ) ) : ?>
