@@ -17,14 +17,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VAHP_PRO_LOADED', true );
-define( 'VAHP_VERSION', '3.3.4' );
-define( 'VAHP_FILE', __FILE__ );
-define( 'VAHP_DIR', plugin_dir_path( __FILE__ ) );
-define( 'VAHP_URL', plugin_dir_url( __FILE__ ) );
-define( 'VAHP_GITHUB', 'portallcomua/voice-add-hivepress' );
-define( 'VAHP_FREE_LIMIT', 25 );
-define( 'VAHP_HUB', 'https://uaserver.pp.ua' ); // сервер Universal Pay Box
+define( 'VAHPP_PRO_LOADED', true );
+define( 'VAHPP_VERSION', '3.3.4' );
+define( 'VAHPP_FILE', __FILE__ );
+define( 'VAHPP_DIR', plugin_dir_path( __FILE__ ) );
+define( 'VAHPP_URL', plugin_dir_url( __FILE__ ) );
+define( 'VAHPP_GITHUB', 'portallcomua/voice-add-hivepress' );
+define( 'VAHPP_FREE_LIMIT', 25 );
+define( 'VAHPP_HUB', 'https://uaserver.pp.ua' ); // сервер Universal Pay Box
 
 require_once vahpp_DIR . 'includes/product.php';
 require_once vahpp_DIR . 'includes/common.php';
