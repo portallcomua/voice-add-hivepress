@@ -1,0 +1,62 @@
+/* Voice ADD — інтерфейс (синьо-жовта палітра) */
+.va-wrap { max-width: 820px; margin: 0 auto; padding: 8px 14px 40px; }
+.va-wrap * { box-sizing: border-box; }
+.va-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+.va-head h1 sup { font-size: 11px; color: #999; }
+.va-head-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.va-pro-bar { background: #fff4c2; border: 1px solid #e6c200; padding: 12px 14px; border-radius: 10px; margin: 8px 0 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.va-pro-ok { background: #e8f6ec; border-color: #1c9c4a; color: #14692f; font-weight: 700; }
+.va-warn { color: #b32d2e; font-weight: 700; }
+.va-muted { color: #6b7280; }
+#va_cam { width: 100%; max-height: 280px; background: #111; border-radius: 10px; margin-bottom: 8px; object-fit: cover; }
+.va-gal { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.va-thumb { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 2px solid #0057b7; cursor: pointer; background: #eee; }
+.va-bg { background: #f1f6fd; border: 1px solid #c9dcf5; padding: 10px 12px; border-radius: 10px; margin-bottom: 10px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.va-row { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+.va-btn { display: block; width: 100%; border: 0; border-radius: 10px; padding: 13px 14px; font-size: 16px; font-weight: 700; cursor: pointer; color: #fff; transition: filter .15s; }
+.va-row .va-btn { width: auto; }
+.va-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.va-btn:disabled { opacity: .6; cursor: wait; }
+.va-blue { background: #0057b7; }
+.va-gray { background: #6b7280; }
+.va-mic { background: #0057b7; margin-top: 10px; padding: 15px; }
+.va-mic.is-on { background: #d63638; animation: vaPulse 1.2s infinite; }
+.va-save { background: #1c9c4a; margin-top: 10px; padding: 17px; font-size: 18px; }
+@keyframes vaPulse { 0%,100% { opacity: 1 } 50% { opacity: .7 } }
+.va-target { background: #fff4c2; border: 1px solid #e6c200; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; font-weight: 700; color: #5c4800; }
+#va_ta { width: 100%; font-family: Consolas, monospace; font-size: 15px; line-height: 1.55; padding: 10px; border: 2px solid #0057b7; border-radius: 10px; }
+#va_ta:focus { outline: 3px solid rgba(255,213,0,.6); }
+.va-msg { margin-top: 12px; padding: 0; font-weight: 600; }
+.va-msg.is-ok, .va-msg.is-err { padding: 10px 12px; border-radius: 8px; }
+.va-msg.is-ok { background: #e8f6ec; color: #14692f; }
+.va-msg.is-err { background: #fdeaea; color: #a11; }
+.va-card { background: #fff; border: 1px solid #dcdcde; border-top: 5px solid #ffd500; border-radius: 10px; padding: 14px 16px; margin-top: 24px; }
+.va-card h2 { margin-top: 0; }
+.va-instr-wrap { margin-top: 28px; border-top: 5px solid #ffd500; padding-top: 6px; transition: background .4s; }
+.va-instr-wrap.is-flash { background: #fff9d6; }
+.va-instr { background: #fff; border: 1px solid #dcdcde; border-radius: 10px; padding: 12px 16px; margin: 12px 0; }
+.va-instr-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid #eee; margin-bottom: 8px; }
+.va-instr-head h3 { margin: 6px 0; color: #0057b7; }
+.va-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.va-table th, .va-table td { border: 1px solid #dcdcde; padding: 6px 9px; text-align: left; vertical-align: top; }
+.va-table th { background: #f1f6fd; }
+.va-pre { background: #1d2327; color: #e2e4e7; padding: 10px 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; }
+@media (max-width: 600px) { .va-row .va-btn { flex: 1 1 100% !important; } }
+
+/* Попап оплати PRO */
+.va-modal[hidden] { display: none !important; }
+.va-modal { position: fixed; inset: 0; z-index: 999999; display: flex; align-items: center; justify-content: center; padding: 14px; }
+.va-modal__bg { position: absolute; inset: 0; background: rgba(10,20,40,.65); }
+.va-modal__box { position: relative; width: 100%; max-width: 470px; max-height: 92vh; overflow: auto; background: #fff; border-top: 8px solid #ffd500; border-radius: 14px; padding: 22px 20px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+.va-modal__box h3 { margin: 0 28px 8px 0; color: #0057b7; }
+.va-modal__x { position: absolute; top: 6px; right: 10px; background: none; border: 0; font-size: 30px; line-height: 1; cursor: pointer; color: #667; }
+.va-modal__price { font-size: 1.6em; font-weight: 800; margin-bottom: 8px; }
+.va-idrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px; background: #f1f6fd; border: 2px dashed #0057b7; border-radius: 12px; }
+.va-idrow strong { flex: 1 1 140px; font-size: 1.3em; word-break: break-all; user-select: all; }
+.va-copy { padding: 10px 14px; background: #ffd500; color: #222; border: 0; border-radius: 10px; font-weight: 700; cursor: pointer; }
+.va-copy.is-copied { background: #1c9c4a; color: #fff; }
+.va-note { margin: 12px 0 8px; padding: 10px 12px; background: #fff4c2; border-radius: 10px; line-height: 1.45; font-size: .95em; }
+.va-modal__msg { padding: 12px; border-radius: 10px; background: #fdeaea; color: #a11; font-weight: 600; line-height: 1.45; margin-bottom: 10px; }
+.va-modal__msg.is-info { background: #e8f1fc; color: #003f87; }
+.va-pro-blocked { background: #fdeaea; border-color: #d63638; color: #a11; font-weight: 600; }
+body.va-lock { overflow: hidden; }
