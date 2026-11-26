@@ -3,7 +3,7 @@
  * Plugin Name: Voice ADD for HivePress PRO
  * Plugin URI:  https://uaserver.pp.ua/voice-add-hivepress-pro/
  * Description: Голосове додавання оголошень у HivePress з фото, прибиранням фону та атрибутами.
- * Version:     3.3.4
+ * Version:     3.3.5
  * Author:      UAServer
  * Author URI:  https://uaserver.pp.ua/
  * License:     GPLv2 or later
@@ -26,16 +26,16 @@ define( 'VAHP_GITHUB', 'portallcomua/voice-add-hivepress' );
 define( 'VAHP_FREE_LIMIT', 25 );
 define( 'VAHP_HUB', 'https://uaserver.pp.ua' ); // сервер Universal Pay Box
 
-require_once VAHP_DIR . 'includes/product.php';
-require_once VAHP_DIR . 'includes/common.php';
+require_once vahpp_DIR . 'includes/product.php';
+require_once vahpp_DIR . 'includes/common.php';
 
 // PRO замінює безкоштовну та старі версії (налаштування та роль спільні).
 // Старі версії (папка «voice-add-hivepress») оголошували ті самі константи й давали Warning — вимикаємо їх автоматично.
-function vahp_pro_deactivate_others() {
+function vahpp_pro_deactivate_others() {
 	if ( ! function_exists( 'is_plugin_active' ) ) {
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 	}
-	$others = array( 'voice-add-hivepress/voice-add-hivepress.php', 'voice-add-hivepress/voice-add-hivepress.php' );
+	$others = array( 'voice-add-hivepress/voice-add-hivepress.php' );
 	$hit    = array();
 	foreach ( array_unique( $others ) as $other ) {
 		if ( plugin_basename( __FILE__ ) !== $other && is_plugin_active( $other ) ) {
@@ -46,11 +46,11 @@ function vahp_pro_deactivate_others() {
 	return $hit;
 }
 register_activation_hook( __FILE__, function () {
-	vahp_setup();
-	vahp_pro_deactivate_others();
+	vahpp_setup();
+	vahpp_pro_deactivate_others();
 } );
 add_action( 'admin_init', function () {
-	$hit = vahp_pro_deactivate_others();
+	$hit = vahpp_pro_deactivate_others();
 	if ( $hit ) {
 		set_transient( 'vahp_deactivated_notice', implode( ', ', $hit ), 60 );
 	}
