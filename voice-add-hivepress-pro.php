@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'VAHPP_PRO_LOADED', true );
-define( 'VAHPP_VERSION', '3.3.4' );
+define( 'VAHPP_VERSION', '3.3.5' );
 define( 'VAHPP_FILE', __FILE__ );
 define( 'VAHPP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VAHPP_URL', plugin_dir_url( __FILE__ ) );
@@ -26,8 +26,8 @@ define( 'VAHPP_GITHUB', 'portallcomua/voice-add-hivepress' );
 define( 'VAHPP_FREE_LIMIT', 25 );
 define( 'VAHPP_HUB', 'https://uaserver.pp.ua' ); // сервер Universal Pay Box
 
-require_once vahpp_DIR . 'includes/product.php';
-require_once vahpp_DIR . 'includes/common.php';
+require_once VAHPP_DIR . 'includes/product.php';
+require_once VAHPP_DIR . 'includes/common.php';
 
 // PRO замінює безкоштовну та старі версії (налаштування та роль спільні).
 // Старі версії (папка «voice-add-hivepress») оголошували ті самі константи й давали Warning — вимикаємо їх автоматично.
