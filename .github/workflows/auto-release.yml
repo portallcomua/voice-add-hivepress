@@ -42,12 +42,12 @@ jobs:
         run: |
           set -euo pipefail
           PACKAGE_ROOT="$RUNNER_TEMP/plugin-package"
-          mkdir -p "$PACKAGE_ROOT/voice-add-hivepress"
-          rsync -a ./ "$PACKAGE_ROOT/voice-add-hivepress/" \
+          mkdir -p "$PACKAGE_ROOT"
+          rsync -a ./ "$PACKAGE_ROOT/" \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='voice-add-hivepress.zip'
-          (cd "$PACKAGE_ROOT" && zip -qr "$GITHUB_WORKSPACE/voice-add-hivepress.zip" voice-add-hivepress)
+          (cd "$PACKAGE_ROOT" && zip -qr "$GITHUB_WORKSPACE/voice-add-hivepress.zip" .)
           test -s "$GITHUB_WORKSPACE/voice-add-hivepress.zip"
 
       - name: Validate version and publish ZIP to release
