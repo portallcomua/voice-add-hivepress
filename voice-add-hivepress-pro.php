@@ -3,7 +3,7 @@
  * Plugin Name: Voice ADD for HivePress PRO
  * Plugin URI:  https://uaserver.pp.ua/voice-add-hivepress-pro/
  * Description: Голосове додавання оголошень у HivePress з фото, прибиранням фону та атрибутами.
- * Version:     3.3.3
+ * Version:     3.3.4
  * Author:      UAServer
  * Author URI:  https://uaserver.pp.ua/
  * License:     GPLv2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'VAHP_PRO_LOADED', true );
-define( 'VAHP_VERSION', '3.3.3' );
+define( 'VAHP_VERSION', '3.3.4' );
 define( 'VAHP_FILE', __FILE__ );
 define( 'VAHP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VAHP_URL', plugin_dir_url( __FILE__ ) );

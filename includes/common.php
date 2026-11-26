@@ -563,17 +563,6 @@ function vahp_page_settings() {
 		update_option( 'vahp_allowed_roles', $roles );
 		$msg = '<div class="notice notice-success is-dismissible"><p>✅ ' . esc_html( vahp_t( 'Збережено!', 'Saved!' ) ) . '</p></div>';
 	}
-	if ( isset( $_POST['vahp_check_update'] ) && check_admin_referer( 'vahp_cfg' ) ) {
-		vahp_updater()->flush();
-		delete_site_transient( 'update_plugins' );
-		wp_update_plugins();
-		$r = vahp_updater()->remote();
-		if ( $r && version_compare( VAHP_VERSION, $r->version, '<' ) ) {
-			$msg = '<div class="notice notice-info"><p>' . sprintf( esc_html( vahp_t( 'Доступна нова версія %s. Оновіть на сторінці «Плагіни».', 'New version %s is available. Update it on the Plugins page.' ) ), '<strong>' . esc_html( $r->version ) . '</strong>' ) . '</p></div>';
-		} else {
-			$msg = '<div class="notice notice-success"><p>' . esc_html( vahp_t( 'У вас остання версія.', 'You have the latest version.' ) ) . '</p></div>';
-		}
-	}
 
 	$rbg   = get_option( 'vahp_rbg_api', '' );
 	$draft = get_option( 'vahp_draft', '0' );
@@ -623,7 +612,6 @@ function vahp_page_settings() {
 			</table>
 			<p class="submit">
 				<button type="submit" name="vahp_save" value="1" class="button button-primary"><?php echo esc_html( vahp_t( 'Зберегти', 'Save' ) ); ?></button>
-				<button type="submit" name="vahp_check_update" value="1" class="button"><?php echo esc_html( vahp_t( 'Перевірити оновлення (GitHub)', 'Check for updates (GitHub)' ) ); ?></button>
 			</p>
 		</form>
 
