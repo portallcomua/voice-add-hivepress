@@ -3,7 +3,7 @@
  * Plugin Name: Voice ADD for HivePress PRO
  * Plugin URI:  https://uaserver.pp.ua/voice-add-hivepress/
  * Description: Голосове додавання оголошень у HivePress з фото та кастомними атрибутами.
- * Version:     2.3.1
+ * Version:     2.3.2
  * Author:      UAServer
  * Author URI:  https://uaserver.pp.ua/
  * License:     GPLv2 or later
@@ -14,7 +14,8 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('VAHP_VERSION',      '2.3.1');
+define('VAHP_VERSION',      '2.3.2');
+define('VAHP_HUB',           'https://uaserver.pp.ua');
 define('VAHP_FILE',         __FILE__);
 define('VAHP_SERVICE_SLUG', 'voice-add-hivepress');
 define('VAHP_GITHUB',       'portallcomua/voice-add-hivepress');
@@ -58,7 +59,8 @@ class VAHP_Updater {
         if (is_wp_error($resp)) return null;
         $d = json_decode(wp_remote_retrieve_body($resp));
         if (!$d || !isset($d->tag_name)) return null;
-        return (object)['version' => ltrim($d->tag_name, 'v'), 'zip' => $d->zipball_url, 'url' => $d->html_url];
+        $package = 'https://github.com/' . $this->repo . '/releases/latest/download/voice-add-hivepress.zip';
+        return (object)['version' => ltrim($d->tag_name, 'v'), 'zip' => $package, 'url' => $d->html_url];
     }
 }
 new VAHP_Updater(VAHP_FILE, VAHP_GITHUB);
@@ -75,10 +77,79 @@ function vahp_get_service_id() {
     if (is_array($service) && isset($service['id']))  return (int) $service['id'];
     return 0;
 }
+/**
+ * Перевірка Freemius через центральний UA Pay Box.
+ * Продукт і Freemius Plan прив'язуються в Pay Box за slug сервісу;
+ * Product ID / Plan ID у цьому плагіні не дублюються.
+ */
+function vahp_pro_state($force = false) {
+    $email = sanitize_email(get_option('admin_email'));
+    $cache = get_option('vahp_freemius_pro', []);
+    $cache = is_array($cache) ? $cache : [];
+    $checked = isset($cache['checked']) ? (int) $cache['checked'] : 0;
+    $same_email = isset($cache['email']) && strtolower($cache['email']) === strtolower($email);
+    $verified_live = $same_email && !empty($cache['verified_live']);
+    $valid_cached = $verified_live && isset($cache['state']) && 'active' === $cache['state'];
+
+    if (!$force && $verified_live && $checked && (time() - $checked) < 5 * MINUTE_IN_SECONDS) {
+        return $cache;
+    }
+    if (!$email || !is_email($email)) {
+        return ['state' => 'free', 'expires' => 0, 'checked' => time(), 'email' => $email, 'verified_live' => false];
+    }
+
+    $response = wp_remote_post(untrailingslashit(VAHP_HUB) . '/wp-json/upb/v1/license/status', [
+        'timeout' => 12,
+        'redirection' => 2,
+        'headers' => ['Accept' => 'application/json'],
+        'body' => ['service' => VAHP_SERVICE_SLUG, 'email' => $email],
+    ]);
+
+    if (is_wp_error($response)) {
+        return $valid_cached && $checked && (time() - $checked) <= 7 * DAY_IN_SECONDS
+            ? $cache
+            : ['state' => 'unknown', 'expires' => 0, 'checked' => $checked, 'email' => $email, 'verified_live' => false];
+    }
+
+    $code = (int) wp_remote_retrieve_response_code($response);
+    $data = json_decode(wp_remote_retrieve_body($response), true);
+    if (200 !== $code || !is_array($data) || !array_key_exists('valid', $data) || !array_key_exists('environment', $data)) {
+        return $valid_cached && $checked && (time() - $checked) <= 7 * DAY_IN_SECONDS
+            ? $cache
+            : ['state' => 'unknown', 'expires' => 0, 'checked' => $checked, 'email' => $email, 'verified_live' => false];
+    }
+
+    $environment = strtolower(trim((string) $data['environment']));
+    $is_live = (0 === $data['environment'] || '0' === $environment || in_array($environment, ['production', 'live'], true));
+    $valid = in_array($data['valid'], [true, 1, '1', 'true', 'yes'], true);
+    $state = [
+        'state' => ($valid && $is_live) ? 'active' : 'free',
+        'expires' => isset($data['expires']) ? absint($data['expires']) : 0,
+        'checked' => time(),
+        'email' => $email,
+        'status' => isset($data['status']) ? sanitize_key($data['status']) : 'unknown',
+        'environment' => $is_live ? 'production' : 'sandbox_or_unverified',
+        'verified_live' => true,
+    ];
+    update_option('vahp_freemius_pro', $state, false);
+    return $state;
+}
+
 function vahp_pro() {
-    if (!function_exists('wcc_check_user_premium')) return false;
-    $sid = vahp_get_service_id();
-    return $sid ? (bool) wcc_check_user_premium(get_current_user_id(), $sid) : false;
+    $state = vahp_pro_state();
+    if (isset($state['state']) && 'active' === $state['state'] &&
+        (empty($state['expires']) || (int) $state['expires'] > time())) {
+        return true;
+    }
+
+    // Не відключаємо доступ тим, хто вже отримав PRO через стару систему UM Core.
+    if (function_exists('wcc_check_user_premium')) {
+        $sid = vahp_get_service_id();
+        if ($sid && wcc_check_user_premium(get_current_user_id(), $sid)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // =====================================================================
@@ -89,6 +160,7 @@ register_activation_hook(__FILE__, function () {
     add_option('vahp_draft', '0');
     add_option('vahp_rbg_api', '');
     add_option('vahp_legacy_migrated', '0');
+    add_option('vahp_freemius_pro', []);
 
     if (class_exists('UM_Client')) {
         UM_Client::register([
