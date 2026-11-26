@@ -144,9 +144,10 @@ function vahpp_hub_url() {
 function vahpp_hub_is_local() {
 	$hub_host  = strtolower( preg_replace( '/^www\./', '', (string) wp_parse_url( vahpp_hub_url(), PHP_URL_HOST ) ) );
 	$site_host = strtolower( preg_replace( '/^www\./', '', (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) );
+	// UA Pay Box exposes global UPB_* classes, not the old UAPM\\PayBox namespace.
 	return $hub_host && $hub_host === $site_host
-		&& class_exists( '\\UAPM\\PayBox\\UPB_Rest' )
-		&& class_exists( '\\UAPM\\PayBox\\UPB_Freemius' );
+		&& class_exists( 'UPB_Rest' )
+		&& class_exists( 'UPB_Freemius' );
 }
 
 /** Запит до центрального UA Pay Box. Product ID, Plan ID і секрети залишаються тільки в Pay Box. */
@@ -191,17 +192,21 @@ function vahpp_pro_state( $force = false ) {
 		return $free;
 	}
 
-	// Якщо UA Pay Box встановлений локально, користуємося його штатною перевіркою.
-	if ( function_exists( 'upb_service_id' ) && function_exists( 'wcc_check_user_premium' ) ) {
+	// UA Pay Box на цьому ж сайті: перевіряємо Freemius за email покупця.
+	// Pay Box зберігає підтверджену підписку саме за email із webhook Freemius.
+	if ( function_exists( 'upb_service_id' ) && class_exists( 'UPB_Freemius' )
+		&& method_exists( 'UPB_Freemius', 'get_email_license' ) ) {
 		$service_id = (int) upb_service_id( 'voice-add-hivepress' );
-		if ( $service_id ) {
-			$active  = (bool) wcc_check_user_premium( $user_id, $service_id );
-			$expires = $active && function_exists( 'wcc_get_user_premium_expiry' )
-				? wcc_get_user_premium_expiry( $user_id, $service_id )
-				: 0;
+		$user       = get_userdata( $user_id );
+		$email      = $user ? sanitize_email( $user->user_email ) : '';
+		if ( $service_id && $email && is_email( $email ) ) {
+			$license = UPB_Freemius::get_email_license( $service_id, $email );
+			$expires = $license && isset( $license->expires ) ? (int) $license->expires : 0;
+			$active  = $license && isset( $license->status ) && 'active' === $license->status
+				&& ( ! $expires || $expires > time() );
 			return array(
 				'state'   => $active ? ( $expires ? 'active' : 'unlimited' ) : 'free',
-				'expires' => $active ? (int) $expires : 0,
+				'expires' => $active ? $expires : 0,
 				'checked' => time(),
 			);
 		}
