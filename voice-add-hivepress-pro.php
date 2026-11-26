@@ -3,7 +3,7 @@
  * Plugin Name: Voice ADD for HivePress PRO
  * Plugin URI:  https://uaserver.pp.ua/voice-add-hivepress-pro/
  * Description: Голосове додавання оголошень у HivePress з фото, прибиранням фону та атрибутами.
- * Version:     3.3.5
+ * Version:     3.3.6
  * Author:      UAServer
  * Author URI:  https://uaserver.pp.ua/
  * License:     GPLv2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 define( 'VAHPP_PRO_LOADED', true );
-define( 'VAHPP_VERSION', '3.3.5' );
+define( 'VAHPP_VERSION', '3.3.6' );
 define( 'VAHPP_FILE', __FILE__ );
 define( 'VAHPP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'VAHPP_URL', plugin_dir_url( __FILE__ ) );
@@ -32,17 +32,34 @@ require_once VAHPP_DIR . 'includes/common.php';
 // PRO замінює безкоштовну та старі версії (налаштування та роль спільні).
 // Старі версії (папка «voice-add-hivepress») оголошували ті самі константи й давали Warning — вимикаємо їх автоматично.
 function vahpp_pro_deactivate_others() {
-	if ( ! function_exists( 'is_plugin_active' ) ) {
+	if ( ! function_exists( 'get_plugins' ) ) {
 		require_once ABSPATH . 'wp-admin/includes/plugin.php';
 	}
-	$others = array( 'voice-add-hivepress/voice-add-hivepress.php' );
-	$hit    = array();
-	foreach ( array_unique( $others ) as $other ) {
-		if ( plugin_basename( __FILE__ ) !== $other && is_plugin_active( $other ) ) {
-			deactivate_plugins( $other );
-			$hit[] = $other;
+
+	$current = plugin_basename( __FILE__ );
+	$plugins = get_plugins();
+	$active  = (array) get_option( 'active_plugins', array() );
+	$hit     = array();
+
+	foreach ( $plugins as $plugin_file => $data ) {
+		if ( $plugin_file === $current || ! in_array( $plugin_file, $active, true ) ) {
+			continue;
+		}
+
+		$name = strtolower( isset( $data['Name'] ) ? wp_strip_all_tags( $data['Name'] ) : '' );
+		$path = strtolower( $plugin_file );
+
+		// Вимикаємо всі старі копії Voice ADD for HivePress незалежно від назви папки.
+		$is_voice_add = 0 === strpos( $name, 'voice add for hivepress' )
+			|| 0 === strpos( $path, 'voice-add-hivepress/' )
+			|| 0 === strpos( $path, 'voice-add-hivepress-pro/' );
+
+		if ( $is_voice_add ) {
+			deactivate_plugins( $plugin_file );
+			$hit[] = $plugin_file;
 		}
 	}
+
 	return $hit;
 }
 register_activation_hook( __FILE__, function () {
