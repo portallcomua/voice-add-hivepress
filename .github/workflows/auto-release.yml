@@ -50,7 +50,7 @@ jobs:
             --exclude='voice-add-hivepress.zip'
           (cd "$PACKAGE_ROOT" && zip -qr "$GITHUB_WORKSPACE/voice-add-hivepress.zip" voice-add-hivepress)
           test -s "$GITHUB_WORKSPACE/voice-add-hivepress.zip"
-          unzip -Z1 "$GITHUB_WORKSPACE/voice-add-hivepress.zip" | grep -qx 'voice-add-hivepress/voice-add-hivepress.php'
+          unzip -Z1 "$GITHUB_WORKSPACE/voice-add-hivepress.zip" | grep -qx 'voice-add-hivepress/voice-add-hivepress-pro.php'
 
       - name: Validate version and publish ZIP to release
         env:
